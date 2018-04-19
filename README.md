@@ -1,2 +1,2 @@
 # Machine_Learning_Practice
-Implementation of ML algorithms
+Implementation of ML/QF algorithms
