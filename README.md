@@ -1,7 +1,7 @@
-# Machine_Learning_Practice
+# Machine Learning & Quantitative Finance
 Implementation of ML/QF algorithms, including:
 
-
+- Deep Mixture Density Networks: deep MDN model implemented by Tensorflow
 - Dynamic Fama-French with Kalman filter: recovering latent alpha & factor loadings based on observed returns
 - Multi-Asset Momentum: extracting momentum signals from various asset class and test with different strategies
 - PCA Color Augmentation: a data augmentation technique widely used in image recognition
