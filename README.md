@@ -1,5 +1,5 @@
 # Machine Learning & Quantitative Finance
-Implementation of ML/QF algorithms
+Implementation of ML/QF algorithms. Feel free to [email me](mailto:jenchieh_cheng@mfe.berkeley.edu) if you have any comment or feedback.
 
 ## 1. Completed
 
