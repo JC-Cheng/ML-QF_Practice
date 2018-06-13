@@ -1,5 +1,7 @@
 # Machine Learning & Quantitative Finance
-Implementation of ML/QF algorithms, including:
+Implementation of ML/QF algorithms
+
+## 1. Completed
 
 - Deep Mixture Density Networks: deep MDN model implemented by Tensorflow
 - Dynamic Fama-French with Kalman filter: recovering latent alpha & factor loadings based on observed returns
@@ -13,3 +15,11 @@ Implementation of ML/QF algorithms, including:
 	- 1) similiarity-based recommender
 	- 2) collaborative filitering (Tensorflow implementation)
 - RNN Queue Imbalance: predicting next timestamp bid/ask direction with limit order book status, with LSTM model implemented in Keras
+
+## 2. Ongoing
+
+- Fractional Differencing on Factor Returns
+
+## 3. Embryo
+
+- Black-Litterman and Pair Trading
