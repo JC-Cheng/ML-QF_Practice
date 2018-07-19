@@ -1,4 +1,5 @@
 import pandas as pd
+import statsmodels.api as sm
 from .strategy import Strategy
 
 
@@ -63,7 +64,6 @@ class IO_strategy:
                 prev_W, prev_W_hedge = Z_overnight, 0
             else:
                 o_ret, o_tc, prev_W, prev_W_hedge = trading_session(d, mkt_overnight, self.overnight, prev_W, prev_W_hedge, capital, tc_func)
-                #prev_W, prev_W_hedge = W, W_hedge
                 
             capital = capital * (1 + o_ret) - o_tc
             
@@ -73,9 +73,6 @@ class IO_strategy:
                 prev_W, prev_W_hedge = Z_intraday, 0
             else:
                 i_ret, i_tc, prev_W, prev_W_hedge = trading_session(d, mkt_intrady, self.intraday, prev_W, prev_W_hedge, capital, tc_func)
-                #i_tc = tc_func(capital, [prev_W, prev_W_hedge], [W, W_hedge], [begin_px, begin_px_hedge])
-                #i_ret = (R * W).sum() + W_hedge * R_hedge
-                #prev_W, prev_W_hedge = W, W_hedge
             
             capital = capital * (1 + i_ret) - i_tc
             
@@ -91,20 +88,46 @@ class IO_strategy:
         
         return
     
-    def report_sharpe_ratio(self):
-        
+    def report_sharpe_ratio(self, period_mask=None):
         if isinstance(self.result, pd.DataFrame):
-            SR_net = self.result['net_return'].mean() / self.result['net_return'].std() * (252) ** 0.5
-            SR_gross = self.result['gross_return'].mean() / self.result['gross_return'].std() * (252) ** 0.5
+            
+            ret = self.result if period_mask is None else self.result.loc[period_mask, :]
+
+            SR_net = ret['net_return'].mean() / ret['net_return'].std() * (252) ** 0.5
+            SR_gross = ret['gross_return'].mean() / ret['gross_return'].std() * (252) ** 0.5
             return {'SR_net': SR_net, 'SR_gross': SR_gross}
         else:
             return None
         
-    def report_information_ratio(self, bmark):
+    def report_information_ratio(self, bmark, OneBeta=True, period_mask=None):
         if isinstance(self.result, pd.DataFrame) and isinstance(bmark.result, pd.DataFrame):
-            pass
+
+            ret_p = self.result if period_mask is None else self.result.loc[period_mask, :]
+            ret_b = bmark.result if period_mask is None else bmark.result.loc[period_mask, :]
+
+            if not OneBeta:
+                res_net = sm.OLS(ret_p['net_return'], sm.add_constant(ret_b['net_return'])).fit()
+                b_net = float(res_net.params[-1])
+
+                res_gross = sm.OLS(ret_p['gross_return'], sm.add_constant(ret_b['gross_return'])).fit()
+                b_gross = float(res_gross.params[-1])
+
+            else:
+                b_net, b_gross = 1, 1
+
+            act_net_ret = ret_p['net_return'] - b_net * ret_b['net_return']
+            act_gross_ret = ret_p['gross_return'] - b_gross * ret_b['gross_return']
+
+            IR_net = act_net_ret.mean() / act_net_ret.std() * (252) ** 0.5
+            IR_gross = act_gross_ret.mean() / act_gross_ret.std() * (252) ** 0.5
+
+            return {'IR_net': IR_net, 'IR_gross': IR_gross}
         else:
             return None
+
+    def information_coefficient(self, mkt_intrady, mkt_overnight):
+
+        pass
         
     def save_dataframe(self, name=None, path='output/'):
         if isinstance(self.result, pd.DataFrame):

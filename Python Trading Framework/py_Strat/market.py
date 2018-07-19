@@ -2,7 +2,7 @@ import pandas as pd
 
 class Market:
     
-    def __init__(self, begin_price, end_price, begin_price_hedge, end_price_hedge):
+    def __init__(self, begin_price=None, end_price=None, begin_price_hedge=None, end_price_hedge=None):
         
         self.begin_px = begin_price
         self.end_px = end_price
@@ -10,8 +10,15 @@ class Market:
         self.begin_px_hedge = begin_price_hedge
         self.end_px_hedge = end_price_hedge
         
-        self.ret = (self.end_px - self.begin_px) / self.begin_px
-        self.ret_hedge = (self.end_px_hedge - self.begin_px_hedge) / self.begin_px_hedge
+        if isinstance(self.begin_px, pd.DataFrame) and isinstance(self.end_px, pd.DataFrame):
+            self.ret = (self.end_px - self.begin_px) / self.begin_px
+        else:
+            self.ret = None
+
+        if isinstance(self.begin_px_hedge, pd.Series) and isinstance(self.end_px_hedge, pd.Series):
+            self.ret_hedge = (self.end_px_hedge - self.begin_px_hedge) / self.begin_px_hedge
+        else:
+            self.ret_hedge = None
         
     def get_returns(self, date):
         if date in self.ret.index:
