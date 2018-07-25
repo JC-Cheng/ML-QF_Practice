@@ -19,7 +19,7 @@ Implementation of ML/QF algorithms. Feel free to [email me](mailto:jenchieh_chen
 ## 2. Ongoing
 
 - Fractional Differencing on Factor Returns
-- Python Trading Framework: a framework allowed to backtest trading strategies and evaluate performance metrics
+- Python Trading Framework: an OOP framework allowed to backtest trading strategies and evaluate performance metrics
 
 ## 3. Embryo
 
