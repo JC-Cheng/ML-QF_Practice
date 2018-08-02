@@ -11,12 +11,18 @@ def trading_session(d, market, strategy, prev_W, prev_W_hedge, capital, tc_func)
     R, R_hedge = market.get_returns(d)
     begin_px, begin_px_hedge = market.get_begin_price(d)
     tc = tc_func(capital, [prev_W, prev_W_hedge], [W, W_hedge], [begin_px, begin_px_hedge])
-    ret = (R * W).sum() + W_hedge * R_hedge
+    #print(type(R), type(W), type(W_hedge), type(R_hedge))
+    ret = ((R if R is not None else 0) * W).sum() + W_hedge * (R_hedge if R_hedge is not None else 0)
     return ret, tc, W, W_hedge
 
 def T_cost(capital, h0, h1, P, cost_per_share=0.005):
     '''
-    0: stocks, 1: hedging_tool (SPY)
+    h0: previous holdings
+    h1: target holings
+
+    list index : 
+    - 0: stocks, 
+    - 1: hedging_tool (eg: SPY)
     '''
     share_trade = (capital * (h0[0] - h1[0]).abs() / P[0]).sum() + (capital * abs(h0[1] - h1[1]) / P[1])
     tc = share_trade * cost_per_share
@@ -74,8 +80,8 @@ class IO_strategy:
         self.result.loc[d0, 'gross_return'] = 0
         
         prev_W_hedge = 0
-        Z_overnight = pd.Series(0, index=self.overnight.W.columns)
-        Z_intraday = pd.Series(0, index=self.intraday.W.columns)
+        Z_overnight = pd.Series(0, index=self.overnight.W.columns) if isinstance(self.overnight.W, pd.DataFrame) else 0
+        Z_intraday = pd.Series(0, index=self.intraday.W.columns) if isinstance(self.intraday.W, pd.DataFrame) else 0
         prev_W = Z_intraday
         for d, d_prev in zip(self.trade_dates[1:], self.trade_dates[:-1]):
             
@@ -200,9 +206,9 @@ class IO_strategy:
         res = res.reindex(self.trade_dates).fillna(0)
         return res
     
-    def eval_exposure(self, beta):
+    def eval_exposure(self):
         
-        res = pd.concat([self.intraday.eval_exposure(beta), self.overnight.eval_exposure(beta)], axis=1)
+        res = pd.concat([self.intraday.eval_exposure(), self.overnight.eval_exposure()], axis=1)
         res.columns = ['Intraday', 'Overnight']
         res = res.reindex(self.trade_dates).fillna(0)
         return res
@@ -228,7 +234,7 @@ class IO_strategy:
         
         return self + (-other)
     
-    def separate_io_result(self, mkt_intraday, mkt_overnight, initial_capital):
+    def separate_io_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost):
         '''
         return: intraday only, overnight only
         '''
@@ -239,21 +245,41 @@ class IO_strategy:
         i_only.overnight.W_hedge = self.overnight.W_hedge * 0
         o_only = self - i_only
         
-        i_only.trade(mkt_intraday, mkt_overnight, initial_capital)
-        o_only.trade(mkt_intraday, mkt_overnight, initial_capital)
+        i_only.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
+        o_only.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
         
         return i_only, o_only
         
-    def separate_hedge_result(self, mkt_intraday, mkt_overnight, initial_capital, return_unhedge=False):
+    def separate_hedge_result(self, mkt_intraday, mkt_overnight, initial_capital, return_unhedge=False, tc_func=T_cost):
         '''
         return: spy part, (optional: unhedge part)
         '''
         unhedge = IO_strategy(self.trade_dates, self.intraday.W, self.overnight.W)
         hedge_only = self - unhedge
-        hedge_only.trade(mkt_intraday, mkt_overnight, initial_capital)
+        hedge_only.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
         
         if return_unhedge:
-            unhedge.trade(mkt_intraday, mkt_overnight, initial_capital)
+            unhedge.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
             return hedge_only, unhedge
         else:
             return hedge_only
+
+    def separate_ls_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost):
+        '''
+        return: long only, short only, ignore all hedging
+        '''
+        l_only = IO_strategy(self.trade_dates, None, None)
+        l_only.intraday.W = self.intraday.W.copy()
+        l_only.intraday.W_hedge = self.intraday.W_hedge * 0
+        l_only.overnight.W = self.overnight.W.copy()
+        l_only.overnight.W_hedge = self.overnight.W_hedge * 0
+
+        l_only.intraday.W.loc[l_only.intraday.W<0] = 0
+        l_only.overnight.W.loc[l_only.overnight.W<0] = 0
+
+        s_only = self - l_only
+        
+        l_only.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
+        s_only.trade(mkt_intraday, mkt_overnight, initial_capital, tc_func=tc_func)
+        
+        return l_only, s_only

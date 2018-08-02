@@ -5,7 +5,7 @@ class Strategy:
     
     def __init__(self, weights=None, hedge_method='None', hedge_ratio=1, beta=None):
         
-        if isinstance(weights, pd.DataFrame):
+        if isinstance(weights, pd.DataFrame) or isinstance(weights, pd.Series):
             self.W = weights.copy()
             if hedge_method == 'Dollar':
                 self.W_hedge = - self.W.sum(axis=1) * hedge_ratio
@@ -18,18 +18,59 @@ class Strategy:
             self.W_hedge = None         
             
     def get_weights(self, date):
-        if date in self.W.index:
-            return self.W.loc[date, :], self.W_hedge.loc[date]
+
+        if isinstance(self.W, pd.DataFrame):
+            W = self.W.loc[date, :] if date in self.W.index else None
+        elif isinstance(self.W, pd.Series):
+            W = self.W.loc[date] if date in self.W.index else None
         else:
-            return pd.Series(0, index=self.W.columns), 0
+            W = None
+
+        if isinstance(self.W_hedge, pd.DataFrame):
+            W_hedge = self.W_hedge.loc[date, :] if date in self.W_hedge.index else None
+        elif isinstance(self.W_hedge, pd.Series):
+            W_hedge = self.W_hedge.loc[date] if date in self.W_hedge.index else None
+        else:
+            W_hedge = None
+
+        return W, W_hedge
             
     def eval_beta(self, beta):
-        
-        return (self.W * beta.loc[self.W.index]).sum(axis=1) + self.W_hedge
+
+        if isinstance(self.W, pd.DataFrame):
+            B = (self.W * beta.loc[self.W.index]).sum(axis=1)
+        elif isinstance(self.W, pd.Series):
+            B = self.W * beta.loc[self.W.index]
+        else:
+            B = 0
+
+        if isinstance(self.W_hedge, pd.DataFrame):
+            B_hedge = self.W_hedge
+        elif isinstance(self.W_hedge, pd.Series):
+            B_hedge = self.W_hedge
+        else:
+            B_hedge = 0
+
+        return B - B_hedge
+
     
     def eval_exposure(self):
-        
-        return self.W.sum(axis=1) + self.W_hedge
+
+        if isinstance(self.W, pd.DataFrame):
+            W = self.W.sum(axis=1)
+        elif isinstance(self.W, pd.Series):
+            W = self.W
+        else:
+            W = 0
+
+        if isinstance(self.W_hedge, pd.DataFrame):
+            W_hedge = self.W_hedge.sum(axis=1)
+        elif isinstance(self.W_hedge, pd.Series):
+            W_hedge = self.W_hedge
+        else:
+            W_hedge = 0
+
+        return W - W_hedge
     
     def __add__(self, other):
         
