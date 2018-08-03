@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-import statsmodels.api as sm
 from .strategy import Strategy
+from .tradingstrategy import TradingStrategy
 
 
 ### HELP FUNCTIONS
@@ -15,7 +15,7 @@ def trading_session(d, market, strategy, prev_W, prev_W_hedge, capital, tc_func)
     ret = ((R if R is not None else 0) * W).sum() + W_hedge * (R_hedge if R_hedge is not None else 0)
     return ret, tc, W, W_hedge
 
-def T_cost(capital, h0, h1, P, cost_per_share=0.005):
+def T_cost_share(capital, h0, h1, P, cost_per_share=0.005):
     '''
     h0: previous holdings
     h1: target holings
@@ -26,6 +26,19 @@ def T_cost(capital, h0, h1, P, cost_per_share=0.005):
     '''
     share_trade = (capital * (h0[0] - h1[0]).abs() / P[0]).sum() + (capital * abs(h0[1] - h1[1]) / P[1])
     tc = share_trade * cost_per_share
+    return tc
+
+def T_cost_ratio(capital, h0, h1, P, commission=0.001):
+    '''
+    h0: previous holdings
+    h1: target holings
+    
+    list index : 
+    - 0: stocks, 
+    - 1: hedging_tool (eg: SPY)
+    '''
+    dollar_trade = capital * (abs(h0[0] - h1[0]) + abs(h0[1] - h1[1]))
+    tc = dollar_trade * commission
     return tc
 
 def snapshot_IC_BR(d, signal, ret):
@@ -54,7 +67,9 @@ def snapshot_IC_BR_combined(d, signal_1, ret_1, signal_2, ret_2):
     
 ###
 
-class IO_strategy:
+### child class
+
+class IO_strategy(TradingStrategy):
     
     def __init__(self, trade_dates, w_intraday, w_overnight, hedge_method='None', hedge_ratio_intraday=1, hedge_ratio_overnight=1, beta=None):
         '''
@@ -65,13 +80,12 @@ class IO_strategy:
         if isinstance(w_overnight, pd.DataFrame):
             assert(set(trade_dates) >= set(w_overnight.index))
         
+        TradingStrategy.__init__(self, trade_dates)
         self.intraday = Strategy(w_intraday, hedge_method, hedge_ratio_intraday, beta)
         self.overnight = Strategy(w_overnight, hedge_method, hedge_ratio_overnight, beta)
-        self.trade_dates = trade_dates
         
-        self.result = None
     
-    def trade(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost):
+    def trade(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost_share):
         
         self.result = pd.DataFrame(index=self.trade_dates, columns=['gross_return', 'capital'], dtype=float)
         
@@ -117,53 +131,7 @@ class IO_strategy:
         
         return
     
-    def metric_sharpe_ratio(self, period_mask=None):
-        if isinstance(self.result, pd.DataFrame):
-            
-            ret = self.result if period_mask is None else self.result.loc[period_mask, :]
-
-            SR_net = ret['net_return'].mean() / ret['net_return'].std() * (252) ** 0.5
-            SR_gross = ret['gross_return'].mean() / ret['gross_return'].std() * (252) ** 0.5
-            return {'SR_net': SR_net, 'SR_gross': SR_gross}
-        else:
-            return None
-
-    def active_returns(self, bmark, OneBeta=False):
-        if isinstance(self.result, pd.DataFrame) and isinstance(bmark.result, pd.DataFrame):
-            if not OneBeta:
-                res_net = sm.OLS(self.result['net_return'], sm.add_constant(bmark.result['net_return'])).fit()
-                b_net = float(res_net.params[-1])
-
-                res_gross = sm.OLS(self.result['gross_return'], sm.add_constant(bmark.result['gross_return'])).fit()
-                b_gross = float(res_gross.params[-1])
-            else:
-                b_net, b_gross = 1, 1
-
-            act_net_ret = self.result['net_return'] - b_net * bmark.result['net_return']
-            act_gross_ret = self.result['gross_return'] - b_gross * bmark.result['gross_return']
-
-            return act_net_ret, act_gross_ret
-        else:
-            return None, None
-        
-    def metric_information_ratio(self, bmark, OneBeta=False, period_mask=None):
-        if isinstance(self.result, pd.DataFrame) and isinstance(bmark.result, pd.DataFrame):
-
-            #ret_p = self.result if period_mask is None else self.result.loc[period_mask, :]
-            #ret_b = bmark.result if period_mask is None else bmark.result.loc[period_mask, :]
-
-            act_net_ret, act_gross_ret = self.active_returns(bmark, OneBeta)
-
-            if period_mask is not None:
-                act_net_ret = act_net_ret.loc[period_mask]
-                act_gross_ret = act_gross_ret.loc[period_mask]
-
-            IR_net = act_net_ret.mean() / act_net_ret.std() * (252) ** 0.5
-            IR_gross = act_gross_ret.mean() / act_gross_ret.std() * (252) ** 0.5
-
-            return {'IR_net': IR_net, 'IR_gross': IR_gross}
-        else:
-            return None
+    
 
     def information_coefficient(self, mkt_intraday, mkt_overnight, return_BR=False):
 
@@ -175,29 +143,14 @@ class IO_strategy:
         intraday = pd.DataFrame([snapshot_IC_BR(d, self.intraday.W, mkt_intraday.ret) for d in self.intraday.W.index], index=self.intraday.W.index)#, columns=['IC', 'BR'])
         combined = pd.DataFrame([snapshot_IC_BR_combined(d, self.overnight.W, mkt_overnight.ret, self.intraday.W, mkt_intraday.ret) for d in self.trade_dates], index=self.trade_dates)#, columns=['IC', 'BR'])
         
-        #IC_BR = pd.DataFrame({'Overnight': IC_overnight, 'Intraday': IC_intraday, 'Combined': IC_combined})
         IC_BR = pd.concat([overnight, intraday, combined], axis=1)
-        #print(IC_BR.head())
+        
         IC_BR.columns = ['Overnight_IC', 'Overnight_BR','Intraday_IC', 'Intraday_BR', 'Combined_IC', 'Combined_BR']
         
         if return_BR:
             return IC_BR[['Overnight_IC', 'Intraday_IC', 'Combined_IC']], IC_BR[['Overnight_BR', 'Intraday_BR', 'Combined_BR']]
         else:
             return IC_BR[['Overnight_IC', 'Intraday_IC', 'Combined_IC']]
-    
-    def metric_maxDD(self, period_mask=None, net_return=True):
-        if isinstance(self.result, pd.DataFrame):
-            balance = self.result['capital'] if net_return else self.result['capital_pre_tc']
-            if period_mask is not None:
-                balance = balance.loc[period_mask]
-            return min(balance / balance.cummax()) - 1
-        else:
-            return 
-
-    def result_to_csv(self, name=None, path='output/'):
-        if isinstance(self.result, pd.DataFrame):
-            self.result.to_csv(path + name + '.csv')
-        return
     
     def eval_beta(self, beta):
         
@@ -234,7 +187,7 @@ class IO_strategy:
         
         return self + (-other)
     
-    def separate_io_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost):
+    def separate_io_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost_share):
         '''
         return: intraday only, overnight only
         '''
@@ -250,7 +203,7 @@ class IO_strategy:
         
         return i_only, o_only
         
-    def separate_hedge_result(self, mkt_intraday, mkt_overnight, initial_capital, return_unhedge=False, tc_func=T_cost):
+    def separate_hedge_result(self, mkt_intraday, mkt_overnight, initial_capital, return_unhedge=False, tc_func=T_cost_share):
         '''
         return: spy part, (optional: unhedge part)
         '''
@@ -264,7 +217,7 @@ class IO_strategy:
         else:
             return hedge_only
 
-    def separate_ls_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost):
+    def separate_ls_result(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost_share):
         '''
         return: long only, short only, ignore all hedging
         '''
