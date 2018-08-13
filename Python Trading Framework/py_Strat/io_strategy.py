@@ -5,7 +5,7 @@ from .tradingstrategy import TradingStrategy
 
 
 ### HELP FUNCTIONS
-
+'''
 def trading_session(d, market, strategy, prev_W, prev_W_hedge, capital, tc_func):
     W, W_hedge = strategy.get_weights(d)
     R, R_hedge = market.get_returns(d)
@@ -14,7 +14,7 @@ def trading_session(d, market, strategy, prev_W, prev_W_hedge, capital, tc_func)
     #print(type(R), type(W), type(W_hedge), type(R_hedge))
     ret = ((R if R is not None else 0) * W).sum() + W_hedge * (R_hedge if R_hedge is not None else 0)
     return ret, tc, W, W_hedge
-
+'''
 def T_cost_share(capital, h0, h1, P, cost_per_share=0.005):
     '''
     h0: previous holdings
@@ -84,7 +84,15 @@ class IO_strategy(TradingStrategy):
         self.intraday = Strategy(w_intraday, hedge_method, hedge_ratio_intraday, beta)
         self.overnight = Strategy(w_overnight, hedge_method, hedge_ratio_overnight, beta)
         
-    
+    @staticmethod
+    def trading_session(d, market, strategy, prev_W, prev_W_hedge, capital, tc_func):
+        W, W_hedge = strategy.get_weights(d)
+        R, R_hedge = market.get_returns(d)
+        begin_px, begin_px_hedge = market.get_begin_price(d)
+        tc = tc_func(capital, [prev_W, prev_W_hedge], [W, W_hedge], [begin_px, begin_px_hedge])
+        ret = ((R if R is not None else 0) * W).sum() + W_hedge * (R_hedge if R_hedge is not None else 0)
+        return ret, tc, W, W_hedge
+
     def trade(self, mkt_intraday, mkt_overnight, initial_capital, tc_func=T_cost_share):
         
         self.result = pd.DataFrame(index=self.trade_dates, columns=['gross_return', 'capital'], dtype=float)
@@ -106,7 +114,7 @@ class IO_strategy(TradingStrategy):
                 o_ret, o_tc = 0, 0
                 prev_W, prev_W_hedge = Z_overnight, 0
             else:
-                o_ret, o_tc, prev_W, prev_W_hedge = trading_session(d, mkt_overnight, self.overnight, prev_W, prev_W_hedge, capital, tc_func)
+                o_ret, o_tc, prev_W, prev_W_hedge = self.trading_session(d, mkt_overnight, self.overnight, prev_W, prev_W_hedge, capital, tc_func)
                 
             capital = capital * (1 + o_ret) - o_tc
             
@@ -115,7 +123,7 @@ class IO_strategy(TradingStrategy):
                 i_ret, i_tc = 0, 0
                 prev_W, prev_W_hedge = Z_intraday, 0
             else:
-                i_ret, i_tc, prev_W, prev_W_hedge = trading_session(d, mkt_intraday, self.intraday, prev_W, prev_W_hedge, capital, tc_func)
+                i_ret, i_tc, prev_W, prev_W_hedge = self.trading_session(d, mkt_intraday, self.intraday, prev_W, prev_W_hedge, capital, tc_func)
             
             capital = capital * (1 + i_ret) - i_tc
             

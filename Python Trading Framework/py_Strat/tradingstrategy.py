@@ -1,13 +1,19 @@
 import pandas as pd
 import statsmodels.api as sm
+import abc
 
 ### parent class 
 
 class TradingStrategy:
+	__metaclass__  = abc.ABCMeta
 
     def __init__(self, trade_dates):
         self.result = None
         self.trade_dates = trade_dates
+
+    @abc.abstractmethod
+    def trade(self):
+        '''trade the defined strategy in the market'''
 
     def metric_sharpe_ratio(self, period_mask=None):
         if isinstance(self.result, pd.DataFrame):
