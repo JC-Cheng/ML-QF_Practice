@@ -5,7 +5,7 @@ import abc
 ### parent class 
 
 class TradingStrategy:
-	__metaclass__  = abc.ABCMeta
+    __metaclass__  = abc.ABCMeta
 
     def __init__(self, trade_dates):
         self.result = None
