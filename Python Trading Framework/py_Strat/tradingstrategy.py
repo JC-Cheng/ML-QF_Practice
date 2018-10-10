@@ -1,5 +1,6 @@
 import pandas as pd
 import statsmodels.api as sm
+import numpy as np
 import abc
 
 ### parent class 
@@ -15,13 +16,35 @@ class TradingStrategy:
     def trade(self):
         '''trade the defined strategy in the market'''
 
-    def metric_sharpe_ratio(self, period_mask=None):
+    def metric_sortino_ratio(self, period_mask=None, ratio_type='net'):
+        '''
+        ratio_type: 'net' or 'gross'
+        '''
         if isinstance(self.result, pd.DataFrame):
             ret = self.result if period_mask is None else self.result.loc[period_mask, :]
+            if ratio_type=='net':
+                return ret['net_return'].mean() / np.maximum(-ret['net_return'], 0).std() * (252) ** 0.5
+            elif ratio_type=='gross':
+                return ret['gross_return'].mean() / np.maximum(-ret['gross_return'], 0).std() * (252) ** 0.5
+            else:
+                print('ratio type: ["net" or "gross"')
+                return None
+        else:
+            return None
 
-            SR_net = ret['net_return'].mean() / ret['net_return'].std() * (252) ** 0.5
-            SR_gross = ret['gross_return'].mean() / ret['gross_return'].std() * (252) ** 0.5
-            return {'SR_net': SR_net, 'SR_gross': SR_gross}
+    def metric_sharpe_ratio(self, period_mask=None, ratio_type='net'):
+        '''
+        ratio_type: 'net' or 'gross'
+        '''
+        if isinstance(self.result, pd.DataFrame):
+            ret = self.result if period_mask is None else self.result.loc[period_mask, :]
+            if ratio_type=='net':
+                return ret['net_return'].mean() / ret['net_return'].std() * (252) ** 0.5
+            elif ratio_type=='gross':
+                return ret['gross_return'].mean() / ret['gross_return'].std() * (252) ** 0.5
+            else:
+                print('ratio type: ["net" or "gross"')
+                return None
         else:
             return None
 
